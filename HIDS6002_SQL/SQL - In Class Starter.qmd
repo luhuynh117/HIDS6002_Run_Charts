@@ -36,8 +36,14 @@ the magnifying glass, using `DESCRIBE immunizations;` and a quick `SELECT * FROM
 
 ```{r}
 #| label: warmup-immunization-counts
+#| 
 #| connection: con
-
+immunization_counts <- dbGetQuery(con, "
+SELECT DESCRIPTION, COUNT(*) AS n
+FROM immunizations
+GROUP BY DESCRIPTION
+ORDER BY n DESC")
+View(immunization_counts)
 # TODO: count how many records exist per immunization DESCRIPTION,
 # most common first. Same GROUP BY + COUNT(*) pattern you already know.
 ```
@@ -50,6 +56,14 @@ lecture. A yes/no question about each patient, answered with `EXISTS`.
 ```{r}
 #| label: patients-with-flu-shot
 #| connection: con
+patients_with_flu_shot <- dbGetQuery(con, "
+SELECT p.Id, p.LAST
+FROM patients p
+WHERE EXISTS (
+    SELECT 'true' FROM immunizations i
+    WHERE i.PATIENT = p.Id AND i.DESCRIPTION LIKE '%Influenza%'
+)")
+View(patients_with_flu_shot)
 
 # TODO: use EXISTS to find patients with at least one immunization
 # record whose DESCRIPTION contains "Influenza".
@@ -63,7 +77,15 @@ as the hypertension file's "patients with and without hypertension" section.
 ```{r}
 #| label: flu-shot-status-naive
 #| connection: con
-
+flu_shot_status_naive <- dbGetQuery(con, "
+SELECT
+    p.Id, p.LAST,
+    CASE WHEN i.PATIENT IS NOT NULL THEN 'Immunized' ELSE 'Not immunized' END AS flu_status
+FROM
+    patients p
+    LEFT JOIN immunizations i ON p.Id = i.PATIENT AND i.DESCRIPTION LIKE '%Influenza%'
+ORDER BY p.Id")
+View(flu_shot_status_naive)
 # TODO: LEFT JOIN patients to immunizations (matched on the same
 # Influenza filter as Step 1), and use CASE WHEN to label each patient
 # "Immunized" or "Not immunized". Don't add DISTINCT yet -- look closely
@@ -87,6 +109,17 @@ column, so the result shows its own evidence rather than just a label.
 #| label: flu-shot-status-recent
 #| connection: con
 
+flu_shot_status <- dbGetQuery(con, "
+SELECT
+    p.Id, p.LAST,
+    CASE WHEN MAX(i.DATE) > '2020-01-01' THEN 'Immunized' ELSE 'Not immunized' END AS flu_status,
+    MAX(i.DATE) AS last_flu_shot_date
+FROM
+    patients p
+    LEFT JOIN immunizations i ON p.Id = i.PATIENT AND i.DESCRIPTION LIKE '%Influenza%'
+GROUP BY p.Id, p.LAST
+ORDER BY flu_status, p.Id")
+View(flu_shot_status)
 # TODO: rewrite Step 2's query using GROUP BY instead of a plain LEFT JOIN, so you can pull MAX(i.DATE) per patient as last_flu_shot_date. Then base the CASE WHEN on whether that # date is after 2020, not just on whether a matching row exists.
 
 # Think about what MAX(i.DATE) actually returns for a patient # with NO flu shot at all -- and why comparing that result to a # date still gives you the right answer in your CASE WHEN, # # without needing a separate check for "no record."
